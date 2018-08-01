@@ -1,18 +1,7 @@
 # -*- coding: utf-8 -*-
-# @Author: WuLC
-# @Date:   2017-09-27 23:02:19
-# @Last Modified by:   LC
-# @Last Modified time: 2017-09-30 10:54:36
 
 
-####################################################################################################################
-# Download images from google with specified keywords for searching
-# search query is created by "main_keyword + supplemented_keyword"
-# if there are multiple keywords, each main_keyword will join with each supplemented_keyword
-# Use selenium and urllib, and each search query will download any number of images that google provide
-# allow single process or multiple processes for downloading
-# Pay attention that since selenium is used, geckodriver and firefox browser is required
-####################################################################################################################
+
 
 import os
 import json
@@ -21,36 +10,31 @@ import logging
 import urllib.request
 import urllib.error
 from urllib.parse import urlparse
-
 from multiprocessing import Pool
 from user_agent import generate_user_agent
 from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
 
 
-def get_image_links(main_keyword, supplemented_keywords, link_file_path, num_requested=150):
+
+def get_image_links(main_keyword, supplemented_keywords, link_file_path, num_requested=1200):
     # number_of_scrolls = int(num_requested / 400) + 1   when  set num_requested=150 , program  will  download  400  pic.
-
     """get image links with selenium
-
     Args:
         main_keyword (str): main keyword
         supplemented_keywords (list[str]): list of supplemented keywords
         link_file_path (str): path of the file to store the links
         num_requested (int, optional): maximum number of images to download
-
     Returns:
         None
     """
     number_of_scrolls = int(num_requested / 400) + 1
     # number_of_scrolls * 400 images will be opened in the browser
     img_urls = set()
-    driver = webdriver.Firefox()
+    driver = webdriver.Chrome()
     for i in range(len(supplemented_keywords)):
         search_query = main_keyword + ' ' + supplemented_keywords[i]
         url = "https://www.google.com/search?q=" + search_query + "&source=lnms&tbm=isch"
         driver.get(url)
-
         for _ in range(number_of_scrolls):
             for __ in range(10):
                 # multiple scrolls needed to show all 400 images
@@ -58,18 +42,17 @@ def get_image_links(main_keyword, supplemented_keywords, link_file_path, num_req
                 time.sleep(2)
             # to load next 400 images
             time.sleep(5)
+            print("scorll over")
             try:
-                driver.find_element_by_xpath("//input[@value='Show more results']").click()
+                driver.find_element_by_xpath("//*[@id='smb']").click()
             except Exception as e:
                 print("Process-{0} reach the end of page or get the maximum number of requested images".format(
                     main_keyword))
                 break
-
-        # imges = driver.find_elements_by_xpath('//div[@class="rg_meta"]') # not working anymore
+        time.sleep(30)
         imges = driver.find_elements_by_xpath('//div[contains(@class,"rg_meta")]')
         for img in imges:
             img_url = json.loads(img.get_attribute('innerHTML'))["ou"]
-            # img_type = json.loads(img.get_attribute('innerHTML'))["ity"]
             img_urls.add(img_url)
         print('Process-{0} add keyword {1} , got {2} image urls so far'.format(main_keyword, supplemented_keywords[i],
                                                                                len(img_urls)))
@@ -114,14 +97,18 @@ def download_images(link_file_path, download_dir, log_dir):
                 ua = generate_user_agent()
                 headers['User-Agent'] = ua
                 headers['referer'] = ref
-                print('\n{0}\n{1}\n{2}'.format(link.strip(), ref, ua))
+                print('\n{0}==>>>{1}.jpg'.format(link.strip(),count))
                 req = urllib.request.Request(link.strip(), headers=headers)
-                response = urllib.request.urlopen(req)
+                try:
+                    response = urllib.request.urlopen(req,timeout=5)
+                except Exception as e:
+                    print (e)
+                    continue
                 data = response.read()
                 file_path = img_dir + '{0}.jpg'.format(count)
                 with open(file_path, 'wb') as wf:
                     wf.write(data)
-                print('Process-{0} download image {1}/{2}.jpg'.format(main_keyword, main_keyword, count))
+                #print('Process-{0} download image {1}/{2}.jpg'.format(main_keyword, main_keyword, count))
                 count += 1
                 if count % 10 == 0:
                     print('Process-{0} is sleeping'.format(main_keyword))
